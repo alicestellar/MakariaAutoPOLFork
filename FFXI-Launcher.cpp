@@ -1,5 +1,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shellapi.h>
 #include <shlwapi.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -1369,9 +1370,52 @@ void removeHostsEntry() {
 
 // Update main to remove hosts entry before exiting
 int main(int argc, char* argv[]) {
+    // Check for admin privileges and request elevation if needed
+    {
+        BOOL isAdmin = FALSE;
+        PSID adminGroup = NULL;
+        SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+        if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+            DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+            CheckTokenMembership(NULL, adminGroup, &isAdmin);
+            FreeSid(adminGroup);
+        }
+        if (!isAdmin) {
+            // Re-launch ourselves with elevation
+            char exePath[MAX_PATH];
+            GetModuleFileNameA(NULL, exePath, MAX_PATH);
+
+            // Rebuild command line arguments
+            std::string args;
+            for (int i = 1; i < argc; i++) {
+                if (i > 1) args += " ";
+                std::string arg = argv[i];
+                if (arg.find(' ') != std::string::npos) {
+                    args += "\"" + arg + "\"";
+                } else {
+                    args += arg;
+                }
+            }
+
+            SHELLEXECUTEINFOA sei = { sizeof(sei) };
+            sei.lpVerb = "runas";
+            sei.lpFile = exePath;
+            sei.lpParameters = args.c_str();
+            sei.nShow = SW_SHOWNORMAL;
+
+            if (ShellExecuteExA(&sei)) {
+                return 0; // Original process exits, elevated one takes over
+            } else {
+                std::cerr << "This application requires administrator privileges.\n";
+                std::cerr << "Please right-click and select 'Run as administrator'.\n";
+                return 1;
+            }
+        }
+    }
+
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 0.2.0\n";
+    std::cout << "Version: 0.2.1\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {

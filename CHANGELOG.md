@@ -9,6 +9,15 @@ Versioning scheme:
 
 ---
 
+## [0.2.1] - 2026-06-19
+
+### Added
+
+- Auto-elevation: if not running as admin, prompts UAC and re-launches elevated
+- FR-13 requirement added to requirements doc
+
+---
+
 ## [0.2.0] - 2026-06-19
 
 ### Added

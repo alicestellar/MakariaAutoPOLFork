@@ -114,6 +114,11 @@
 - If the user confirms retry, re-launch that account (including any necessary profile swap).
 - If the user declines, skip that account and continue to the next in the queue (or return to the main menu if it was the last/only account).
 
+### FR-13: Admin Elevation on Startup
+
+- If the application is not running with administrator privileges, it MUST prompt for elevation (UAC) before proceeding.
+- The application requires admin for: hosts file modification, BlockInput, and file operations in Program Files directories.
+
 ---
 
 ## Non-Functional Requirements
