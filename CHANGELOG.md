@@ -9,6 +9,27 @@ Versioning scheme:
 
 ---
 
+## [3.0.0] - 2026-06-19
+
+### Milestone: All Features Complete
+
+Final major release. All planned features from the AIDLC roadmap are implemented and tested.
+
+### Complete Feature Set (since upstream 0.0.23)
+
+- **Profile Management**: 5 profile groups x 4 slots, auto-swap, archive/import
+- **Alliance UI**: Party-grouped display, single/multi select, presets
+- **Sequential Launch**: Comma-separated or preset-driven, Enter pause between each
+- **Saved Presets**: Named custom groups stored in config, launchable from menu
+- **Party Presets**: Built-in P1/P2/P3/Alliance shortcuts
+- **Account Defaults**: Shared password, TOTP, Windower args across accounts
+- **Config Safety**: Backup before every write, restore on corruption
+- **POL Path Discovery**: Registry + common paths + user prompt
+- **Auto-Elevation**: UAC prompt if not running as admin
+- **Backward Compatibility**: Legacy configs auto-migrated
+
+---
+
 ## [2.2.0] - 2026-06-19
 
 ### Added
