@@ -9,6 +9,25 @@ Versioning scheme:
 
 ---
 
+## [2.0.0] - 2026-06-19
+
+### Milestone: Full Multi-Launch Flow Complete
+
+Second major release. The complete multi-account launch workflow is functional:
+select characters, swap profiles, launch sequentially with pauses, return to menu.
+
+### Features (since 1.0.0)
+
+- Unified Alliance Selection UI with party-grouped display
+- Sequential multi-launch via `[M]` with comma-separated character numbers
+- Automatic profile swap between queue entries (no countdown needed)
+- Progress counter during sequential launch
+- Exit option `[Q]` for clean shutdown
+- Returns to main menu after launches (persistent session)
+- Unit 9 (ad-hoc queue builder) eliminated — covered by multi-launch input
+
+---
+
 ## [1.3.0] - 2026-06-19
 
 ### Added
