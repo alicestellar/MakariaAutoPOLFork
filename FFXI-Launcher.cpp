@@ -72,6 +72,11 @@ struct AccountDefaults {
     std::string args;
 };
 
+struct SavedPreset {
+    std::string name;
+    std::vector<int> accountIndices; // 1-based indices into accounts array
+};
+
 struct GlobalConfig {
     int delay;
     bool POLProxy;
@@ -80,6 +85,7 @@ struct GlobalConfig {
     int activeProfileGroup;  // Last profile group loaded into login_w.bin (0 = unknown)
     AccountDefaults defaults; // Default values for new accounts
     std::vector<AccountConfig> accounts;
+    std::vector<SavedPreset> presets; // User-saved launch presets
 };
 
 #define SHA1_BLOCK_SIZE 64
@@ -455,6 +461,17 @@ void writeConfigFile(const std::string& path, const GlobalConfig& config) {
         accounts.push_back(acc);
     }
     j["accounts"] = accounts;
+
+    // Save presets
+    json presets = json::array();
+    for (const auto& preset : config.presets) {
+        json p;
+        p["name"] = preset.name;
+        p["accounts"] = preset.accountIndices;
+        presets.push_back(p);
+    }
+    j["presets"] = presets;
+
     std::ofstream file(path);
     file << j.dump(4);
 }
@@ -480,6 +497,20 @@ GlobalConfig loadConfig(const std::string& path) {
             config.defaults.password = d.value("password", "");
             config.defaults.totpSecret = d.value("totpSecret", "");
             config.defaults.args = d.value("args", "");
+        }
+
+        // Load presets
+        if (j.contains("presets")) {
+            for (const auto& p : j["presets"]) {
+                SavedPreset preset;
+                preset.name = p.value("name", "");
+                if (p.contains("accounts")) {
+                    for (const auto& idx : p["accounts"]) {
+                        preset.accountIndices.push_back(idx.get<int>());
+                    }
+                }
+                config.presets.push_back(preset);
+            }
         }
 
         if (j.contains("accounts")) {
@@ -1898,7 +1929,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 2.1.0\n";
+    std::cout << "Version: 2.2.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -2044,6 +2075,22 @@ int main(int argc, char* argv[]) {
             std::cout << "  [P3] Launch Party 3 (chars 13-18)\n";
         if (config.accounts.size() >= 12)
             std::cout << "  [A]  Launch Full Alliance (all characters)\n";
+        // Show saved presets
+        if (!config.presets.empty()) {
+            std::cout << "  --- Saved Presets ---\n";
+            for (size_t pi = 0; pi < config.presets.size(); pi++) {
+                std::cout << "  [" << (pi + 1) << "p] " << config.presets[pi].name << " (";
+                for (size_t ai = 0; ai < config.presets[pi].accountIndices.size(); ai++) {
+                    int idx = config.presets[pi].accountIndices[ai];
+                    if (idx >= 1 && (size_t)idx <= config.accounts.size()) {
+                        if (ai > 0) std::cout << ", ";
+                        std::cout << config.accounts[idx - 1].name;
+                    }
+                }
+                std::cout << ")\n";
+            }
+        }
+        std::cout << "  [S] Manage saved presets\n";
         std::cout << "  [E] Edit configuration\n";
         std::cout << "  [B] Backup/Archive login_w.bin\n";
         std::cout << "  [I] Import existing archives\n";
@@ -2077,6 +2124,117 @@ int main(int argc, char* argv[]) {
         if (lowerInput == "i") {
             importArchives(config, configPath);
             continue;
+        }
+        if (lowerInput == "s") {
+            // Manage saved presets
+            std::string presetInput;
+            std::cout << "\n--- Saved Presets ---\n";
+            std::cout << "  [C] Create new preset\n";
+            std::cout << "  [D] Delete a preset\n";
+            std::cout << "  [X] Back\n";
+            std::cout << "Choice: ";
+            std::getline(std::cin, presetInput);
+            std::transform(presetInput.begin(), presetInput.end(), presetInput.begin(), ::tolower);
+
+            if (presetInput == "c") {
+                SavedPreset newPreset;
+                std::cout << "Preset name: ";
+                std::getline(std::cin, newPreset.name);
+                if (newPreset.name.empty()) { std::cout << "Cancelled.\n"; continue; }
+                std::cout << "Enter character numbers separated by commas (e.g. 1,3,7): ";
+                std::getline(std::cin, presetInput);
+                std::stringstream pss(presetInput);
+                std::string ptoken;
+                while (std::getline(pss, ptoken, ',')) {
+                    ptoken.erase(0, ptoken.find_first_not_of(" \t"));
+                    ptoken.erase(ptoken.find_last_not_of(" \t") + 1);
+                    if (!ptoken.empty() && std::all_of(ptoken.begin(), ptoken.end(), ::isdigit)) {
+                        int idx = std::stoi(ptoken);
+                        if (idx >= 1 && (size_t)idx <= config.accounts.size()) {
+                            newPreset.accountIndices.push_back(idx);
+                        }
+                    }
+                }
+                if (newPreset.accountIndices.empty()) {
+                    std::cout << "No valid characters. Cancelled.\n";
+                } else {
+                    config.presets.push_back(newPreset);
+                    writeConfigFile(configPath, config);
+                    std::cout << "Preset '" << newPreset.name << "' saved with " << newPreset.accountIndices.size() << " character(s).\n";
+                }
+            } else if (presetInput == "d") {
+                if (config.presets.empty()) {
+                    std::cout << "No presets to delete.\n";
+                } else {
+                    for (size_t pi = 0; pi < config.presets.size(); pi++) {
+                        std::cout << "  [" << (pi + 1) << "] " << config.presets[pi].name << "\n";
+                    }
+                    std::cout << "Delete which? ";
+                    std::getline(std::cin, presetInput);
+                    if (!presetInput.empty() && std::all_of(presetInput.begin(), presetInput.end(), ::isdigit)) {
+                        int idx = std::stoi(presetInput);
+                        if (idx >= 1 && (size_t)idx <= config.presets.size()) {
+                            std::cout << "Delete '" << config.presets[idx - 1].name << "'? (y/n): ";
+                            std::getline(std::cin, presetInput);
+                            if (presetInput == "y" || presetInput == "Y") {
+                                config.presets.erase(config.presets.begin() + idx - 1);
+                                writeConfigFile(configPath, config);
+                                std::cout << "Deleted.\n";
+                            }
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
+        // Check for saved preset launch (e.g., "1p", "2p", "3p")
+        if (lowerInput.size() >= 2 && lowerInput.back() == 'p') {
+            std::string numPart = lowerInput.substr(0, lowerInput.size() - 1);
+            if (!numPart.empty() && std::all_of(numPart.begin(), numPart.end(), ::isdigit)) {
+                int presetIdx = std::stoi(numPart);
+                if (presetIdx >= 1 && (size_t)presetIdx <= config.presets.size()) {
+                    SavedPreset& preset = config.presets[presetIdx - 1];
+                    std::vector<AccountConfig*> launchQueue;
+                    for (int idx : preset.accountIndices) {
+                        if (idx >= 1 && (size_t)idx <= config.accounts.size()) {
+                            launchQueue.push_back(&config.accounts[idx - 1]);
+                        }
+                    }
+                    if (!launchQueue.empty()) {
+                        std::cout << "\nLaunching preset '" << preset.name << "' (" << launchQueue.size() << " chars)...\n";
+                        for (size_t qi = 0; qi < launchQueue.size(); qi++) {
+                            AccountConfig* acc = launchQueue[qi];
+                            if (acc->profileGroup > 0) {
+                                if (!swapProfileGroup(acc->profileGroup, config, configPath)) {
+                                    std::cerr << "Profile swap failed for " << acc->name << ". Skipping.\n";
+                                    continue;
+                                }
+                            }
+                            std::cout << "\n--- [" << (qi + 1) << "/" << launchQueue.size() << "] Launching: " << acc->name << " ---\n";
+                            if (!config.POLProxy) {
+                                launchAccount(*acc, config);
+                            } else {
+                                shouldExit = false;
+                                proxyPort = (config.clientRegion == "JP") ? 51300 : 51304;
+                                std::thread proxyThread(startProxyServer);
+                                launchAccount(*acc, config);
+                                while (!shouldExit) { Sleep(100); }
+                                proxyThread.join();
+                                if (hostsEntryAdded.load()) { removeHostsEntry(); hostsEntryAdded = false; }
+                            }
+                            if (qi < launchQueue.size() - 1) {
+                                std::cout << "\n[CHECKPOINT] " << acc->name << " launched.\n";
+                                std::cout << "Press Enter when ready for next character...";
+                                std::string dummy;
+                                std::getline(std::cin, dummy);
+                            }
+                        }
+                        std::cout << "\nPreset '" << preset.name << "' complete. Returning to menu...\n";
+                    }
+                    continue;
+                }
+            }
         }
 
         // Party/Alliance presets — build queue and fall through to sequential launch

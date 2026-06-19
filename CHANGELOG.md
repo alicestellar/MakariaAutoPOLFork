@@ -9,6 +9,18 @@ Versioning scheme:
 
 ---
 
+## [2.2.0] - 2026-06-19
+
+### Added
+
+- Saved custom presets: create named launch groups stored in `config.json`
+- `[S]` Manage presets menu (create/delete)
+- Saved presets displayed in main menu with character names
+- Launch presets by typing `1p`, `2p`, etc.
+- `presets` array in config.json with name + account indices
+
+---
+
 ## [2.1.0] - 2026-06-19
 
 ### Added
