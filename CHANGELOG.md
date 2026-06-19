@@ -9,6 +9,18 @@ Versioning scheme:
 
 ---
 
+## [0.4.0] - 2026-06-19
+
+### Added
+
+- Archive management menu (`[B]` from main selection screen)
+- Shows all 5 archive slots with associated account names
+- Save current `login_w.bin` to any slot (1-5) with overwrite confirmation
+- Assign accounts to archive group during save (new or existing accounts)
+- Duplicate slot validation within the same group
+
+---
+
 ## [0.3.1] - 2026-06-19
 
 ### Changed

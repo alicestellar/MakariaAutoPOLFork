@@ -1253,6 +1253,182 @@ void startProxyServer() {
     }
 }
 
+// Archive management: backup current login_w.bin to a numbered slot
+void archiveMenu(GlobalConfig& config, const std::string& configPath) {
+    std::string input;
+
+    std::cout << "\n========================================\n";
+    std::cout << "  Archive Management\n";
+    std::cout << "========================================\n";
+    std::cout << "Archives store copies of login_w.bin as login_w.{1-5}.bin\n";
+    std::cout << "Each archive holds up to 4 POL account slots.\n\n";
+
+    // Show existing archives
+    std::cout << "Existing archives:\n";
+    bool anyArchiveExists = false;
+    for (int i = 1; i <= 5; i++) {
+        std::string archivePath = config.polPath + "\\login_w." + std::to_string(i) + ".bin";
+        if (GetFileAttributesA(archivePath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            anyArchiveExists = true;
+            std::cout << "  [" << i << "] login_w." << i << ".bin - ";
+            // Show which accounts are in this group
+            bool first = true;
+            for (const auto& acc : config.accounts) {
+                if (acc.profileGroup == i) {
+                    if (!first) std::cout << ", ";
+                    std::cout << acc.name << " (slot " << acc.slot << ")";
+                    first = false;
+                }
+            }
+            if (first) std::cout << "(no accounts assigned)";
+            std::cout << "\n";
+        } else {
+            std::cout << "  [" << i << "] login_w." << i << ".bin - (empty)\n";
+        }
+    }
+
+    if (config.activeProfileGroup > 0) {
+        std::cout << "\nCurrently active: profile group " << config.activeProfileGroup << "\n";
+    }
+
+    std::cout << "\nOptions:\n";
+    std::cout << "  [S] Save current login_w.bin to an archive slot\n";
+    std::cout << "  [X] Back to main menu\n";
+    std::cout << "Choice: ";
+    std::getline(std::cin, input);
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+
+    if (input != "s") return;
+
+    // Ask which slot to save to
+    std::cout << "\nSave current login_w.bin to which slot (1-5)? ";
+    std::getline(std::cin, input);
+    if (input.empty() || !std::all_of(input.begin(), input.end(), ::isdigit)) {
+        std::cout << "Invalid slot. Cancelled.\n";
+        return;
+    }
+    int targetSlot = std::stoi(input);
+    if (targetSlot < 1 || targetSlot > 5) {
+        std::cout << "Slot must be 1-5. Cancelled.\n";
+        return;
+    }
+
+    std::string destPath = config.polPath + "\\login_w." + std::to_string(targetSlot) + ".bin";
+    std::string sourcePath = config.polPath + "\\login_w.bin";
+
+    // Check if source exists
+    if (GetFileAttributesA(sourcePath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        std::cerr << "No login_w.bin found at: " << sourcePath << "\n";
+        return;
+    }
+
+    // Check if destination already exists — confirm overwrite
+    if (GetFileAttributesA(destPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        std::cout << "Archive slot " << targetSlot << " already exists. Overwrite? (y/n): ";
+        std::getline(std::cin, input);
+        if (input != "y" && input != "Y") {
+            std::cout << "Cancelled.\n";
+            return;
+        }
+    }
+
+    // Perform the copy
+    if (!CopyFileA(sourcePath.c_str(), destPath.c_str(), FALSE)) {
+        DWORD err = GetLastError();
+        std::cerr << "Failed to copy (error " << err << "): " << sourcePath << " -> " << destPath << "\n";
+        return;
+    }
+
+    std::cout << "Saved login_w.bin -> login_w." << targetSlot << ".bin\n";
+
+    // Update active profile group
+    config.activeProfileGroup = targetSlot;
+    writeConfigFile(configPath, config);
+
+    // Ask about slot assignments for accounts in this group
+    std::cout << "\nWould you like to assign accounts to this archive group now? (y/n): ";
+    std::getline(std::cin, input);
+    if (input != "y" && input != "Y") return;
+
+    std::cout << "\nTip: Slots should ideally be sequential (1,2,3,4) but you can use any combination.\n";
+    std::cout << "How many accounts are in this archive? (1-4): ";
+    std::getline(std::cin, input);
+    if (input.empty() || !std::all_of(input.begin(), input.end(), ::isdigit)) return;
+    int numAccounts = std::stoi(input);
+    if (numAccounts < 1 || numAccounts > 4) {
+        std::cout << "Must be 1-4.\n";
+        return;
+    }
+
+    for (int i = 0; i < numAccounts; i++) {
+        std::cout << "\nAccount " << (i + 1) << " in archive " << targetSlot << ":\n";
+
+        // Find or create the account
+        std::cout << "  Character name: ";
+        std::string name;
+        std::getline(std::cin, name);
+        if (name.empty()) continue;
+
+        // Check if account already exists
+        AccountConfig* existing = nullptr;
+        for (auto& acc : config.accounts) {
+            if (_stricmp(acc.name.c_str(), name.c_str()) == 0) {
+                existing = &acc;
+                break;
+            }
+        }
+
+        int slot = 0;
+        while (true) {
+            std::cout << "  POL slot within this archive (1-4): ";
+            std::getline(std::cin, input);
+            if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                slot = std::stoi(input);
+                if (slot >= 1 && slot <= 4) {
+                    // Check for duplicate in same group
+                    bool duplicate = false;
+                    for (const auto& acc : config.accounts) {
+                        if (&acc == existing) continue;
+                        if (acc.profileGroup == targetSlot && acc.slot == slot) {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (duplicate) {
+                        std::cout << "  Slot " << slot << " already taken in group " << targetSlot << ". Try again.\n";
+                        continue;
+                    }
+                    break;
+                }
+            }
+            std::cout << "  Must be 1-4. Try again.\n";
+        }
+
+        if (existing) {
+            existing->profileGroup = targetSlot;
+            existing->slot = slot;
+            std::cout << "  Updated " << name << " -> group " << targetSlot << " slot " << slot << "\n";
+        } else {
+            // Create new account entry
+            AccountConfig newAcc;
+            newAcc.name = name;
+            newAcc.profileGroup = targetSlot;
+            newAcc.slot = slot;
+            std::cout << "  Password: ";
+            std::getline(std::cin, newAcc.password);
+            std::cout << "  TOTP Secret (leave empty if not using): ";
+            std::getline(std::cin, newAcc.totpSecret);
+            std::cout << "  Windower arguments (leave empty for none): ";
+            std::getline(std::cin, newAcc.args);
+            config.accounts.push_back(newAcc);
+            std::cout << "  Added " << name << " -> group " << targetSlot << " slot " << slot << "\n";
+        }
+    }
+
+    writeConfigFile(configPath, config);
+    std::cout << "\nArchive setup complete.\n";
+}
+
 bool editConfig(GlobalConfig& config) {
     std::string input;
     while (true) {
@@ -1469,7 +1645,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 0.3.1\n";
+    std::cout << "Version: 0.4.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1559,13 +1735,18 @@ int main(int argc, char* argv[]) {
                 std::cout << "  [" << (i + 1) << "] " << config.accounts[i].name << " (slot " << config.accounts[i].slot << ")\n";
             }
             std::cout << "  [E] Edit configuration\n";
+            std::cout << "  [B] Backup/Archive login_w.bin\n";
             std::string input;
             int choice = 0;
             while (true) {
-                std::cout << "Enter number (1-" << config.accounts.size() << ") or 'E' to edit configuration: ";
+                std::cout << "Enter number (1-" << config.accounts.size() << "), 'E' to edit, or 'B' to archive: ";
                 std::getline(std::cin, input);
                 std::string lowerInput = input;
                 std::transform(lowerInput.begin(), lowerInput.end(), lowerInput.begin(), ::tolower);
+                if (lowerInput == "b") {
+                    archiveMenu(config, configPath);
+                    break; // return to selection
+                }
                 if (lowerInput == "e") {
                     if (!editConfig(config)) {
                         writeConfigFile(configPath, config);
