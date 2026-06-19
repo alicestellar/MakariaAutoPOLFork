@@ -60,7 +60,8 @@ struct AccountConfig {
     std::string name;
     std::string password;
     std::string totpSecret;
-    int slot;
+    int profileGroup; // 1-5, which login_w.{N}.bin this account belongs to
+    int slot;         // 1-4, the slot within the profile group's login_w.bin
     std::string args;
 };
 
@@ -424,6 +425,7 @@ void writeConfigFile(const std::string& path, const GlobalConfig& config) {
         acc["name"] = account.name;
         acc["password"] = account.password;
         acc["totpSecret"] = account.totpSecret;
+        acc["profileGroup"] = account.profileGroup;
         acc["slot"] = account.slot;
         acc["args"] = account.args;
         accounts.push_back(acc);
@@ -452,6 +454,7 @@ GlobalConfig loadConfig(const std::string& path) {
                 account.name = acc.value("name", "");
                 account.password = acc["password"];
                 account.totpSecret = acc["totpSecret"];
+                account.profileGroup = acc.value("profileGroup", 0); // 0 means legacy (needs migration)
                 account.slot = acc["slot"];
                 account.args = acc.value("args", "");
                 config.accounts.push_back(account);
@@ -462,6 +465,104 @@ GlobalConfig loadConfig(const std::string& path) {
         config.clientRegion = "US"; // Default to US on error
     }
     return config;
+}
+
+// Migrate legacy configs that don't have profileGroup assignments
+bool migrateConfig(GlobalConfig& config) {
+    // Check if any account is missing profileGroup (value 0 = legacy)
+    bool needsMigration = false;
+    for (const auto& acc : config.accounts) {
+        if (acc.profileGroup == 0) {
+            needsMigration = true;
+            break;
+        }
+    }
+    if (!needsMigration) return false;
+
+    std::cout << "\n";
+    std::cout << "========================================\n";
+    std::cout << "  Config Migration Required\n";
+    std::cout << "========================================\n";
+    std::cout << "Your config is from an older version and needs profile group assignments.\n";
+    std::cout << "Each account needs a profile group (1-5) and slot (1-4).\n\n";
+    std::cout << "Would you like to:\n";
+    std::cout << "  [A] Auto-assign all accounts to group 1 with sequential slots\n";
+    std::cout << "  [M] Manually assign each account\n";
+    std::cout << "Choice: ";
+
+    std::string input;
+    std::getline(std::cin, input);
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+
+    if (input == "a") {
+        int slot = 1;
+        int group = 1;
+        for (auto& acc : config.accounts) {
+            if (acc.profileGroup == 0) {
+                acc.profileGroup = group;
+                acc.slot = slot;
+                slot++;
+                if (slot > 4) {
+                    slot = 1;
+                    group++;
+                    if (group > 5) {
+                        std::cerr << "WARNING: More than 20 accounts detected. Extra accounts assigned to group 5.\n";
+                        group = 5;
+                    }
+                }
+            }
+        }
+        std::cout << "Auto-assigned " << config.accounts.size() << " accounts across " << group << " profile group(s).\n";
+    } else {
+        for (auto& acc : config.accounts) {
+            if (acc.profileGroup == 0) {
+                std::cout << "\nAccount: " << acc.name << " (current POL slot: " << acc.slot << ")\n";
+
+                // Profile group
+                while (true) {
+                    std::cout << "  Profile group (1-5): ";
+                    std::getline(std::cin, input);
+                    if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                        int pg = std::stoi(input);
+                        if (pg >= 1 && pg <= 5) {
+                            acc.profileGroup = pg;
+                            break;
+                        }
+                    }
+                    std::cout << "  Must be 1-5. Try again.\n";
+                }
+
+                // Slot
+                while (true) {
+                    std::cout << "  Slot within group " << acc.profileGroup << " (1-4): ";
+                    std::getline(std::cin, input);
+                    if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                        int slot = std::stoi(input);
+                        if (slot >= 1 && slot <= 4) {
+                            // Check for duplicates
+                            bool duplicate = false;
+                            for (const auto& other : config.accounts) {
+                                if (&other == &acc) continue;
+                                if (other.profileGroup == acc.profileGroup && other.slot == slot) {
+                                    duplicate = true;
+                                    break;
+                                }
+                            }
+                            if (duplicate) {
+                                std::cout << "  Group " << acc.profileGroup << " slot " << slot << " is already in use. Try again.\n";
+                                continue;
+                            }
+                            acc.slot = slot;
+                            break;
+                        }
+                    }
+                    std::cout << "  Must be 1-4. Try again.\n";
+                }
+            }
+        }
+        std::cout << "Manual assignment complete.\n";
+    }
+    return true; // Config was modified, needs saving
 }
 
 void setupConfig(GlobalConfig& config) {
@@ -530,19 +631,47 @@ void setupConfig(GlobalConfig& config) {
         std::getline(std::cin, account.password);
         std::cout << "TOTP Secret (leave empty if not using): ";
         std::getline(std::cin, account.totpSecret);
-        // Slot (1-4)
+        // Profile Group (1-5)
         while (true) {
-            std::cout << "POL Slot number (1-20): ";
-            std::cout << "Slots 5-20 requires Windower.";
+            std::cout << "Profile group (1-5, default 1): ";
+            std::getline(std::cin, input);
+            if (input.empty()) {
+                account.profileGroup = 1;
+                break;
+            }
+            if (std::all_of(input.begin(), input.end(), ::isdigit)) {
+                int pg = std::stoi(input);
+                if (pg >= 1 && pg <= 5) {
+                    account.profileGroup = pg;
+                    break;
+                }
+            }
+            std::cout << "Profile group must be 1-5. Try again.\n";
+        }
+        // Slot (1-4) within the profile group
+        while (true) {
+            std::cout << "POL Slot number within profile group (1-4): ";
             std::getline(std::cin, input);
             if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
                 int slot = std::stoi(input);
-                if (slot >= 1 && slot <= 20) {
+                if (slot >= 1 && slot <= 4) {
+                    // Check for duplicate profileGroup+slot
+                    bool duplicate = false;
+                    for (const auto& acc : config.accounts) {
+                        if (acc.profileGroup == account.profileGroup && acc.slot == slot) {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (duplicate) {
+                        std::cout << "Profile group " << account.profileGroup << " slot " << slot << " is already in use. Try again.\n";
+                        continue;
+                    }
                     account.slot = slot;
                     break;
                 }
             }
-            std::cout << "POL Slot must be 1 - 20. Try again.\n";
+            std::cout << "Slot must be 1-4. Try again.\n";
         }
         std::cout << "Windower arguments (e.g. -p=\"ProfileName\" leave empty for none) ";
         std::getline(std::cin, account.args);
@@ -1242,7 +1371,7 @@ void removeHostsEntry() {
 int main(int argc, char* argv[]) {
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 0.1.0\n";
+    std::cout << "Version: 0.2.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1298,6 +1427,11 @@ int main(int argc, char* argv[]) {
             std::cout << "Re-running discovery...\n";
         }
         config.polPath = discoverPolPath();
+        writeConfigFile(configPath, config);
+    }
+
+    // Migrate legacy configs without profileGroup assignments
+    if (!config.accounts.empty() && migrateConfig(config)) {
         writeConfigFile(configPath, config);
     }
 

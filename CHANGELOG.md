@@ -9,6 +9,22 @@ Versioning scheme:
 
 ---
 
+## [0.2.0] - 2026-06-19
+
+### Added
+
+- `profileGroup` field (1-5) on each account in `config.json`
+- Profile group + slot duplicate validation during account setup
+- Legacy config migration: auto-assign or manual assignment when old config detected
+- Profile group prompt during new account creation
+
+### Changed
+
+- Slot range restricted to 1-4 (within a profile group) instead of 1-20
+- Setup flow now asks for profile group before slot
+
+---
+
 ## [0.1.0] - 2026-06-19
 
 ### Added
