@@ -1293,10 +1293,128 @@ void archiveMenu(GlobalConfig& config, const std::string& configPath) {
 
     std::cout << "\nOptions:\n";
     std::cout << "  [S] Save current login_w.bin to an archive slot\n";
+    std::cout << "  [I] Import existing archives (from MultiPOL or manual setup)\n";
     std::cout << "  [X] Back to main menu\n";
     std::cout << "Choice: ";
     std::getline(std::cin, input);
     std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+
+    if (input == "x") return;
+
+    if (input == "i") {
+        // Import existing archives — scan for login_w.{N}.bin files and assign accounts
+        std::cout << "\n--- Import Existing Archives ---\n";
+        std::cout << "This will let you assign account names to existing login_w.{N}.bin files.\n\n";
+
+        for (int i = 1; i <= 5; i++) {
+            std::string archivePath = config.polPath + "\\login_w." + std::to_string(i) + ".bin";
+            if (GetFileAttributesA(archivePath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                continue; // Skip non-existent files
+            }
+
+            // Check if this group already has accounts assigned
+            bool hasAccounts = false;
+            for (const auto& acc : config.accounts) {
+                if (acc.profileGroup == i) {
+                    hasAccounts = true;
+                    break;
+                }
+            }
+
+            if (hasAccounts) {
+                std::cout << "Archive " << i << ": already has accounts assigned. Skip.\n";
+                continue;
+            }
+
+            std::cout << "Archive " << i << " (login_w." << i << ".bin) found but has no accounts assigned.\n";
+            std::cout << "  Set up accounts for this archive? (y/n): ";
+            std::getline(std::cin, input);
+            if (input != "y" && input != "Y") continue;
+
+            std::cout << "  How many accounts in this archive? (1-4): ";
+            std::getline(std::cin, input);
+            if (input.empty() || !std::all_of(input.begin(), input.end(), ::isdigit)) continue;
+            int numAccounts = std::stoi(input);
+            if (numAccounts < 1 || numAccounts > 4) {
+                std::cout << "  Must be 1-4. Skipping.\n";
+                continue;
+            }
+
+            for (int a = 0; a < numAccounts; a++) {
+                std::cout << "\n  Account " << (a + 1) << " in archive " << i << ":\n";
+                AccountConfig newAcc;
+                newAcc.profileGroup = i;
+
+                std::cout << "    Character name: ";
+                std::getline(std::cin, newAcc.name);
+                if (newAcc.name.empty()) continue;
+
+                // Check for existing account with same name
+                bool exists = false;
+                for (auto& acc : config.accounts) {
+                    if (_stricmp(acc.name.c_str(), newAcc.name.c_str()) == 0) {
+                        acc.profileGroup = i;
+                        std::cout << "    Account '" << newAcc.name << "' already exists. Updated to group " << i << ".\n";
+                        // Still ask for slot
+                        while (true) {
+                            std::cout << "    POL slot (1-4): ";
+                            std::getline(std::cin, input);
+                            if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                                int slot = std::stoi(input);
+                                if (slot >= 1 && slot <= 4) {
+                                    acc.slot = slot;
+                                    break;
+                                }
+                            }
+                            std::cout << "    Must be 1-4.\n";
+                        }
+                        exists = true;
+                        break;
+                    }
+                }
+                if (exists) continue;
+
+                // New account — collect details
+                while (true) {
+                    std::cout << "    POL slot (1-4): ";
+                    std::getline(std::cin, input);
+                    if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                        int slot = std::stoi(input);
+                        if (slot >= 1 && slot <= 4) {
+                            // Duplicate check
+                            bool dup = false;
+                            for (const auto& acc : config.accounts) {
+                                if (acc.profileGroup == i && acc.slot == slot) {
+                                    dup = true;
+                                    break;
+                                }
+                            }
+                            if (dup) {
+                                std::cout << "    Slot " << slot << " already taken in group " << i << ".\n";
+                                continue;
+                            }
+                            newAcc.slot = slot;
+                            break;
+                        }
+                    }
+                    std::cout << "    Must be 1-4.\n";
+                }
+
+                std::cout << "    Password: ";
+                std::getline(std::cin, newAcc.password);
+                std::cout << "    TOTP Secret (leave empty if not using): ";
+                std::getline(std::cin, newAcc.totpSecret);
+                std::cout << "    Windower arguments (leave empty for none): ";
+                std::getline(std::cin, newAcc.args);
+                config.accounts.push_back(newAcc);
+                std::cout << "    Added " << newAcc.name << " -> group " << i << " slot " << newAcc.slot << "\n";
+            }
+        }
+
+        writeConfigFile(configPath, config);
+        std::cout << "\nImport complete.\n";
+        return;
+    }
 
     if (input != "s") return;
 
@@ -1645,7 +1763,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 0.4.0\n";
+    std::cout << "Version: 0.4.1\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {

@@ -9,6 +9,18 @@ Versioning scheme:
 
 ---
 
+## [0.4.1] - 2026-06-19
+
+### Added
+
+- Import existing archives option (`[I]` in archive menu)
+- Scans for existing `login_w.{N}.bin` files (e.g., from MultiPOL)
+- Lets user assign account names, passwords, TOTP, slots to discovered archives
+- Skips archives that already have accounts assigned
+- Updates existing accounts if name matches
+
+---
+
 ## [0.4.0] - 2026-06-19
 
 ### Added
