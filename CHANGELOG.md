@@ -9,6 +9,23 @@ Versioning scheme:
 
 ---
 
+## [1.3.0] - 2026-06-19
+
+### Added
+
+- Sequential multi-launch: `[M]` option to launch multiple characters in order
+- Enter comma-separated numbers (e.g., `1,3,5`) to build a launch queue
+- Launches one at a time, pauses between each (Press Enter to continue)
+- Shows progress counter (`[1/3]`, `[2/3]`, etc.)
+- Profile swaps happen automatically between queue entries
+- Returns to main menu after all characters launched
+
+### Removed
+
+- Non-skippable countdown after profile swap (unnecessary — CopyFileA is synchronous)
+
+---
+
 ## [1.1.0] - 2026-06-19
 
 ### Added

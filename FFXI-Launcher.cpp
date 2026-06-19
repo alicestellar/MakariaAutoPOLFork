@@ -1898,7 +1898,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 1.1.0\n";
+    std::cout << "Version: 1.3.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -2034,12 +2034,13 @@ int main(int argc, char* argv[]) {
         }
 
         std::cout << "\n  Options:\n";
+        std::cout << "  [M] Launch multiple (enter numbers separated by commas)\n";
         std::cout << "  [E] Edit configuration\n";
         std::cout << "  [B] Backup/Archive login_w.bin\n";
         std::cout << "  [I] Import existing archives\n";
         std::cout << "  [Q] Exit\n";
         std::cout << "===================================================\n";
-        std::cout << "Select character number to launch, or option letter: ";
+        std::cout << "Select character number, 'M' for multi-launch, or option letter: ";
 
         std::string input;
         std::getline(std::cin, input);
@@ -2066,6 +2067,73 @@ int main(int argc, char* argv[]) {
         }
         if (lowerInput == "i") {
             importArchives(config, configPath);
+            continue;
+        }
+
+        // Multi-launch mode
+        if (lowerInput == "m") {
+            std::cout << "Enter character numbers separated by commas (e.g. 1,3,5): ";
+            std::getline(std::cin, input);
+
+            // Parse comma-separated numbers into a launch queue
+            std::vector<AccountConfig*> launchQueue;
+            std::stringstream ss(input);
+            std::string token;
+            while (std::getline(ss, token, ',')) {
+                // Trim whitespace
+                token.erase(0, token.find_first_not_of(" \t"));
+                token.erase(token.find_last_not_of(" \t") + 1);
+                if (!token.empty() && std::all_of(token.begin(), token.end(), ::isdigit)) {
+                    int idx = std::stoi(token);
+                    if (idx >= 1 && (size_t)idx <= config.accounts.size()) {
+                        launchQueue.push_back(&config.accounts[idx - 1]);
+                    } else {
+                        std::cout << "Skipping invalid number: " << idx << "\n";
+                    }
+                }
+            }
+
+            if (launchQueue.empty()) {
+                std::cout << "No valid characters selected.\n";
+                continue;
+            }
+
+            // Sequential launch loop
+            std::cout << "\nLaunching " << launchQueue.size() << " character(s) sequentially...\n";
+            for (size_t qi = 0; qi < launchQueue.size(); qi++) {
+                AccountConfig* acc = launchQueue[qi];
+
+                // Swap profile group if needed
+                if (acc->profileGroup > 0) {
+                    if (!swapProfileGroup(acc->profileGroup, config, configPath)) {
+                        std::cerr << "Profile swap failed for " << acc->name << ". Skipping.\n";
+                        continue;
+                    }
+                }
+
+                std::cout << "\n--- [" << (qi + 1) << "/" << launchQueue.size() << "] Launching: " << acc->name << " ---\n";
+
+                if (!config.POLProxy) {
+                    launchAccount(*acc, config);
+                } else {
+                    shouldExit = false;
+                    proxyPort = (config.clientRegion == "JP") ? 51300 : 51304;
+                    std::thread proxyThread(startProxyServer);
+                    launchAccount(*acc, config);
+                    while (!shouldExit) { Sleep(100); }
+                    proxyThread.join();
+                    if (hostsEntryAdded.load()) { removeHostsEntry(); hostsEntryAdded = false; }
+                }
+
+                // Pause between launches (except after the last one)
+                if (qi < launchQueue.size() - 1) {
+                    std::cout << "\n[CHECKPOINT] " << acc->name << " launched.\n";
+                    std::cout << "Press Enter when ready for next character...";
+                    std::getline(std::cin, input);
+                }
+            }
+
+            std::cout << "\nAll " << launchQueue.size() << " character(s) launched. Returning to menu...\n";
             continue;
         }
 
