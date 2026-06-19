@@ -9,6 +9,24 @@ Versioning scheme:
 
 ---
 
+## [1.1.0] - 2026-06-19
+
+### Added
+
+- New unified Alliance Selection UI (replaces old character selection menu)
+- Party-grouped display (P1/P2/P3 labels, separators between parties)
+- Shows profile group and slot info for each character
+- `[Q]` Exit option to cleanly close the application
+- Returns to main menu after launching (no longer exits after single launch)
+- `--character` CLI flag still bypasses the menu for scripted use
+
+### Changed
+
+- Main menu is now always displayed regardless of account count (even 1 account)
+- Launch flow now loops back to menu instead of exiting
+
+---
+
 ## [1.0.0] - 2026-06-19
 
 ### Milestone: Profile Management Complete

@@ -1898,7 +1898,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 1.0.0\n";
+    std::cout << "Version: 1.1.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1979,106 +1979,130 @@ int main(int argc, char* argv[]) {
         std::cout << "No accounts configured. Please run with --setup to configure accounts.\n";
         return 1;
     }
-    // Main loop for character selection and editing
-    while (true) {
-        // If more than one account and no character specified, prompt user
-        if (characterName.empty() && config.accounts.size() > 1) {
-            std::cout << "\nSelect a character to log in with:\n";
-            for (size_t i = 0; i < config.accounts.size(); ++i) {
-                std::cout << "  [" << (i + 1) << "] " << config.accounts[i].name << " (slot " << config.accounts[i].slot << ")\n";
-            }
-            std::cout << "  [E] Edit configuration\n";
-            std::cout << "  [B] Backup/Archive login_w.bin\n";
-            std::cout << "  [I] Import existing archives (MultiPOL)\n";
-            std::string input;
-            int choice = 0;
-            while (true) {
-                std::cout << "Enter number (1-" << config.accounts.size() << "), 'E' to edit, 'B' to archive, or 'I' to import: ";
-                std::getline(std::cin, input);
-                std::string lowerInput = input;
-                std::transform(lowerInput.begin(), lowerInput.end(), lowerInput.begin(), ::tolower);
-                if (lowerInput == "i") {
-                    importArchives(config, configPath);
-                    break; // return to selection
-                }
-                if (lowerInput == "b") {
-                    archiveMenu(config, configPath);
-                    break; // return to selection
-                }
-                if (lowerInput == "e") {
-                    if (!editConfig(config)) {
-                        writeConfigFile(configPath, config);
-                        // After editing, reload config and restart selection
-                        config = loadConfig(configPath);
-                        break; // break inner while, return to selection
-                    } else {
-                        writeConfigFile(configPath, config);
-                        std::cout << "Configuration updated. Exiting.\n";
-                        return 0;
-                    }
-                }
-                if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
-                    choice = std::stoi(input);
-                    if (choice >= 1 && (size_t)choice <= config.accounts.size()) {
-                        characterName = config.accounts[choice - 1].name;
-                        break;
-                    }
-                }
-                std::cout << "Invalid choice. Try again.\n";
-            }
-            if (characterName.empty()) {
-                continue; // Go back to selection if editConfig returned
-            }
-        }
-        // Find the account to launch
+
+    // If --character was specified on command line, skip the menu
+    if (!characterName.empty()) {
         AccountConfig* toLaunch = nullptr;
-        if (characterName.empty()) {
-            // If only one account exists, use it regardless of slot
-            if (config.accounts.size() == 1) {
-                toLaunch = &config.accounts[0];
-            } else {
-                // If multiple accounts, we should have already prompted for selection
-                // This is just a fallback
-                std::cout << "No account selected. Please specify a character name.\n";
-                return 1;
-            }
-        } else {
-            for (auto& acc : config.accounts) {
-                if (_stricmp(acc.name.c_str(), characterName.c_str()) == 0) { toLaunch = &acc; break; }
-            }
+        for (auto& acc : config.accounts) {
+            if (_stricmp(acc.name.c_str(), characterName.c_str()) == 0) { toLaunch = &acc; break; }
         }
         if (!toLaunch) {
-            std::cout << "No account found for requested character name.\n";
+            std::cout << "No account found for character: " << characterName << "\n";
             return 1;
         }
-
-        // Swap profile group if needed before launching
         if (toLaunch->profileGroup > 0) {
             if (!swapProfileGroup(toLaunch->profileGroup, config, configPath)) {
                 std::cerr << "Profile swap failed. Aborting launch.\n";
                 return 1;
             }
         }
-
         if (!config.POLProxy) {
             launchAccount(*toLaunch, config);
             return 0;
         }
-        // Set proxy port based on client region
         proxyPort = (config.clientRegion == "JP") ? 51300 : 51304;
-
-        // Start proxy server
         std::thread proxyThread(startProxyServer);
         launchAccount(*toLaunch, config);
-        // Wait for a request, then exit
         while (!shouldExit) { Sleep(100); }
         proxyThread.join();
-        // Remove hosts entry before exiting (cleanup is also done in proxy thread and handler, but this ensures it)
-        if (hostsEntryAdded.load()) {
-            removeHostsEntry();
-            hostsEntryAdded = false;
-        }
+        if (hostsEntryAdded.load()) { removeHostsEntry(); hostsEntryAdded = false; }
         return 0;
+    }
+
+    // Main menu loop — Alliance Selection UI
+    while (true) {
+        std::cout << "\n===================================================\n";
+        std::cout << "           FFXI autoPOL - Alliance Launcher\n";
+        std::cout << "===================================================\n";
+
+        // Display accounts grouped by party
+        // Party 1 = accounts 1-6, Party 2 = 7-12, Party 3 = 13-18 (display position)
+        std::cout << "\n  Characters:\n";
+        for (size_t i = 0; i < config.accounts.size(); ++i) {
+            if (i == 6 || i == 12) {
+                std::cout << "  ---\n"; // Party separator
+            }
+            std::string partyLabel;
+            if (i < 6) partyLabel = "P1";
+            else if (i < 12) partyLabel = "P2";
+            else partyLabel = "P3";
+
+            std::cout << "  [" << (i + 1) << "] " << partyLabel << " | "
+                      << config.accounts[i].name
+                      << " (group " << config.accounts[i].profileGroup
+                      << " slot " << config.accounts[i].slot << ")\n";
+        }
+
+        std::cout << "\n  Options:\n";
+        std::cout << "  [E] Edit configuration\n";
+        std::cout << "  [B] Backup/Archive login_w.bin\n";
+        std::cout << "  [I] Import existing archives\n";
+        std::cout << "  [Q] Exit\n";
+        std::cout << "===================================================\n";
+        std::cout << "Select character number to launch, or option letter: ";
+
+        std::string input;
+        std::getline(std::cin, input);
+        std::string lowerInput = input;
+        std::transform(lowerInput.begin(), lowerInput.end(), lowerInput.begin(), ::tolower);
+
+        // Handle menu options
+        if (lowerInput == "q") {
+            std::cout << "Exiting.\n";
+            return 0;
+        }
+        if (lowerInput == "e") {
+            if (!editConfig(config)) {
+                writeConfigFile(configPath, config);
+                config = loadConfig(configPath);
+            } else {
+                writeConfigFile(configPath, config);
+            }
+            continue;
+        }
+        if (lowerInput == "b") {
+            archiveMenu(config, configPath);
+            continue;
+        }
+        if (lowerInput == "i") {
+            importArchives(config, configPath);
+            continue;
+        }
+
+        // Try to parse as a number (single account selection)
+        if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+            int choice = std::stoi(input);
+            if (choice >= 1 && (size_t)choice <= config.accounts.size()) {
+                AccountConfig* toLaunch = &config.accounts[choice - 1];
+
+                // Swap profile group if needed
+                if (toLaunch->profileGroup > 0) {
+                    if (!swapProfileGroup(toLaunch->profileGroup, config, configPath)) {
+                        std::cerr << "Profile swap failed. Aborting launch.\n";
+                        continue;
+                    }
+                }
+
+                std::cout << "Launching: " << toLaunch->name << "\n";
+
+                if (!config.POLProxy) {
+                    launchAccount(*toLaunch, config);
+                } else {
+                    shouldExit = false;
+                    proxyPort = (config.clientRegion == "JP") ? 51300 : 51304;
+                    std::thread proxyThread(startProxyServer);
+                    launchAccount(*toLaunch, config);
+                    while (!shouldExit) { Sleep(100); }
+                    proxyThread.join();
+                    if (hostsEntryAdded.load()) { removeHostsEntry(); hostsEntryAdded = false; }
+                }
+
+                std::cout << "\nLaunch complete. Returning to menu...\n";
+                continue; // Return to main menu
+            }
+        }
+
+        std::cout << "Invalid selection. Try again.\n";
     }
     return 0;
 }
