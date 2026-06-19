@@ -97,6 +97,23 @@
 - Existing `config.json` files without `profileGroup` and `slot` fields MUST continue to work.
 - If legacy config is detected, the application SHOULD offer to migrate (assign all accounts to profile group 1 with sequential slots).
 
+### FR-10: Exit Option
+
+- The main menu MUST include an exit option to cleanly close the application.
+- Selecting exit MUST clean up any resources (hosts file entries, etc.) before terminating.
+
+### FR-11: Return to Main Menu After Launch Queue
+
+- Once all selected accounts in a launch queue have been launched and the user has confirmed the last one, the application MUST return to the main menu instead of exiting.
+- This allows the user to launch additional characters or perform other actions without restarting the application.
+
+### FR-12: POL Window Closure Detection and Retry
+
+- During the login automation sequence, if the PlayOnline Viewer window closes unexpectedly before FFXI loads, the application MUST detect the closed window.
+- Upon detection, the application MUST ask the user if they would like to retry launching that account.
+- If the user confirms retry, re-launch that account (including any necessary profile swap).
+- If the user declines, skip that account and continue to the next in the queue (or return to the main menu if it was the last/only account).
+
 ---
 
 ## Non-Functional Requirements

@@ -68,6 +68,7 @@ struct GlobalConfig {
     int delay;
     bool POLProxy;
     std::string clientRegion; // "US" or "JP" or "EU"
+    std::string polPath;     // Path to POL usr\all directory
     std::vector<AccountConfig> accounts;
 };
 
@@ -342,10 +343,81 @@ std::string readConfigFile(const std::string& path) {
     return buffer.str();
 }
 
+// Discover the POL usr\all directory path via registry, common paths, or user prompt
+std::string discoverPolPath() {
+    // Method 1: Check Windows Registry
+    // Try HKLM\SOFTWARE\WOW6432Node\PlayOnline\InstallFolder and similar keys
+    const char* regPaths[] = {
+        "SOFTWARE\\WOW6432Node\\PlayOnline\\InstallFolder",
+        "SOFTWARE\\PlayOnline\\InstallFolder",
+        "SOFTWARE\\WOW6432Node\\PlayOnlineUS\\InstallFolder",
+        "SOFTWARE\\PlayOnlineUS\\InstallFolder",
+        "SOFTWARE\\WOW6432Node\\PlayOnlineEU\\InstallFolder",
+        "SOFTWARE\\PlayOnlineEU\\InstallFolder",
+    };
+
+    for (const char* regPath : regPaths) {
+        HKEY hKey;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, regPath, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+            char value[MAX_PATH] = {0};
+            DWORD valueSize = sizeof(value);
+            DWORD type = 0;
+            if (RegQueryValueExA(hKey, "0001", NULL, &type, (LPBYTE)value, &valueSize) == ERROR_SUCCESS) {
+                RegCloseKey(hKey);
+                std::string polBase = value;
+                std::string usrAllPath = polBase + "\\usr\\all";
+                if (GetFileAttributesA(usrAllPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+                    std::cout << "POL path found via registry: " << usrAllPath << "\n";
+                    return usrAllPath;
+                }
+            } else {
+                RegCloseKey(hKey);
+            }
+        }
+    }
+
+    // Method 2: Check common install paths
+    const char* commonPaths[] = {
+        "C:\\Program Files (x86)\\PlayOnline\\SquareEnix\\PlayOnlineViewer\\usr\\all",
+        "C:\\Program Files\\PlayOnline\\SquareEnix\\PlayOnlineViewer\\usr\\all",
+        "D:\\Program Files (x86)\\PlayOnline\\SquareEnix\\PlayOnlineViewer\\usr\\all",
+        "D:\\Program Files\\PlayOnline\\SquareEnix\\PlayOnlineViewer\\usr\\all",
+    };
+
+    for (const char* commonPath : commonPaths) {
+        if (GetFileAttributesA(commonPath) != INVALID_FILE_ATTRIBUTES) {
+            std::cout << "POL path found at common location: " << commonPath << "\n";
+            return std::string(commonPath);
+        }
+    }
+
+    // Method 3: Prompt the user
+    std::cout << "\nCould not automatically detect your PlayOnline installation.\n";
+    std::cout << "Please enter the full path to your PlayOnline 'usr\\all' directory.\n";
+    std::cout << "Example: C:\\Program Files (x86)\\PlayOnline\\SquareEnix\\PlayOnlineViewer\\usr\\all\n";
+    std::cout << "Path: ";
+    std::string userPath;
+    std::getline(std::cin, userPath);
+
+    // Trim whitespace
+    userPath.erase(0, userPath.find_first_not_of(" \t\""));
+    userPath.erase(userPath.find_last_not_of(" \t\"") + 1);
+
+    if (GetFileAttributesA(userPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        std::cout << "Path verified: " << userPath << "\n";
+        return userPath;
+    }
+
+    std::cerr << "WARNING: Path does not exist or is not accessible: " << userPath << "\n";
+    std::cerr << "Storing it anyway. You can update it later in config.json under \"polPath\".\n";
+    return userPath;
+}
+
 void writeConfigFile(const std::string& path, const GlobalConfig& config) {
     json j;
     j["delay"] = config.delay;
     j["clientRegion"] = config.clientRegion;
+    j["polPath"] = config.polPath;
     json accounts = json::array();
     for (const auto& account : config.accounts) {
         json acc;
@@ -373,6 +445,7 @@ GlobalConfig loadConfig(const std::string& path) {
         json j = json::parse(content);
         config.delay = j.value("delay", 3000);
         config.clientRegion = j.value("clientRegion", "US"); // Default to US if not set
+        config.polPath = j.value("polPath", ""); // Empty means needs discovery
         if (j.contains("accounts")) {
             for (const auto& acc : j["accounts"]) {
                 AccountConfig account;
@@ -1167,8 +1240,9 @@ void removeHostsEntry() {
 
 // Update main to remove hosts entry before exiting
 int main(int argc, char* argv[]) {
-    std::cout << "Created by: jaku | https://twitter.com/jaku\n";
-    std::cout << "Version: 0.0.23  | https://github.com/jaku/FFXI-autoPOL\n";
+    std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
+    std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
+    std::cout << "Version: 0.1.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1215,6 +1289,16 @@ int main(int argc, char* argv[]) {
     // Clean up any existing hosts file entries at startup
     if (config.POLProxy) {
         removeHostsEntry();
+    }
+
+    // POL Path Discovery: ensure we have a valid polPath
+    if (config.polPath.empty() || GetFileAttributesA(config.polPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        if (!config.polPath.empty()) {
+            std::cout << "Stored POL path is no longer valid: " << config.polPath << "\n";
+            std::cout << "Re-running discovery...\n";
+        }
+        config.polPath = discoverPolPath();
+        writeConfigFile(configPath, config);
     }
 
     if (setupMode || config.accounts.empty()) {

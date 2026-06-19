@@ -98,6 +98,7 @@ Stories are ordered by dependency and testability. Each story represents a worki
 - [ ] Accounts displayed grouped as Party 1 (1-6), Party 2 (7-12), Party 3 (13-18)
 - [ ] Only configured accounts shown (no empty slots displayed as selectable)
 - [ ] Options include: pick single character by number, select multiple characters
+- [ ] Exit option available to cleanly close the application
 - [ ] Edit config menu remains accessible
 - [ ] Replaces the old simple selection menu
 - [ ] Works correctly with 1 account, 4 accounts, 6 accounts, 18 accounts
@@ -105,7 +106,25 @@ Stories are ordered by dependency and testability. Each story represents a worki
 
 ---
 
-## Story 6: Sequential Multi-Launch with Pause
+## Story 6: Profile Swap with Warning and Non-Skippable Delay
+
+**As a** multiboxer,
+**I want** a warning and mandatory delay when the app swaps profile groups,
+**So that** the file swap completes before the next POL instance reads it.
+
+**Acceptance Criteria:**
+
+- [ ] When a launch requires a different profile group than currently active, display warning
+- [ ] File swap executes immediately when user confirms
+- [ ] Non-skippable countdown (default 4 seconds) runs after the swap
+- [ ] User cannot bypass the countdown
+- [ ] After countdown, proceed to launch the account
+- [ ] If swap is not needed (same group), no delay
+- [ ] Works for both single-account and multi-account launches
+
+---
+
+## Story 7: Sequential Multi-Launch with Pause
 
 **As a** multiboxer,
 **I want** autoPOL to launch queued accounts one at a time and wait for me between each,
@@ -116,26 +135,12 @@ Stories are ordered by dependency and testability. Each story represents a worki
 - [ ] After launching an account, display checkpoint message
 - [ ] Wait for user to press Enter (default) before proceeding to next
 - [ ] Continue key is configurable in `config.json` (default: Enter)
-- [ ] After last account in queue, display completion message and exit
-- [ ] Single-account selection launches immediately (no pause needed)
-- [ ] Profile group file swap (Story 3) executes before each launch as needed
-
----
-
-## Story 7: Profile Swap with Warning and Non-Skippable Delay
-
-**As a** multiboxer,
-**I want** a warning and mandatory delay when the app swaps profile groups between launches,
-**So that** the file swap completes before the next POL instance reads it.
-
-**Acceptance Criteria:**
-
-- [ ] When next account requires a different profile group, display warning
-- [ ] File swap executes immediately when user presses the continue key
-- [ ] Non-skippable countdown (default 4 seconds) runs after the swap
-- [ ] User cannot bypass the countdown
-- [ ] After countdown, proceed to launch the next account
-- [ ] If swap is not needed (same group), no delay — just the normal Enter pause
+- [ ] After last account in queue, return to the main menu (not exit)
+- [ ] Single-account selection launches immediately (no pause needed), then returns to menu
+- [ ] Profile group file swap with delay (Story 6) executes before each launch as needed
+- [ ] If POL window closes unexpectedly during login automation, detect and ask user to retry
+- [ ] On retry: re-launch that account (re-swap profile if needed)
+- [ ] On decline: skip that account and continue to next in queue (or return to menu)
 
 ---
 
@@ -194,12 +199,30 @@ Story 0 (baseline build)
             ├── Story 3 (file swap)
             └── Story 4 (archive mgmt)
                 └── Story 5 (unified UI → produces launch queue)
-                    └── Story 6 (sequential launch → consumes queue)
-                        └── Story 7 (swap delay)
+                    └── Story 6 (swap delay → any launch with profile change)
+                        └── Story 7 (sequential launch → consumes queue)
                             ├── Story 8 (party presets)
                             ├── Story 9 (ad-hoc queue builder)
                             └── Story 10 (saved presets)
 ```
 
-After Story 6, you have a fully functional end-to-end multi-account launcher.
-Stories 7-10 layer on polish and convenience.
+## Version Milestones
+
+| Version | After Unit | Milestone |
+|---------|-----------|-----------|
+| 0.1.0   | Unit 1    | POL path discovery |
+| 0.2.0   | Unit 2    | Config schema |
+| 0.3.0   | Unit 3    | File swap |
+| 0.4.0   | Unit 4    | Archive management |
+| **1.0.0** | Unit 4  | **Major: Profile management complete** |
+| 1.1.0   | Unit 5    | Unified alliance UI |
+| 1.2.0   | Unit 6    | Profile swap delay |
+| 1.3.0   | Unit 7    | Sequential multi-launch |
+| **2.0.0** | Unit 7  | **Major: Full multi-launch flow complete** |
+| 2.1.0   | Unit 8    | Party presets |
+| 2.2.0   | Unit 9    | Ad-hoc queue builder |
+| 2.3.0   | Unit 10   | Saved custom presets |
+| **3.0.0** | Unit 10 | **Major: All features complete** |
+
+After Story 7, you have a fully functional end-to-end multi-account launcher.
+Stories 8-10 layer on convenience presets.

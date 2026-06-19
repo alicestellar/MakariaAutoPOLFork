@@ -126,3 +126,12 @@
 **Context**: User cancelled further action. Pausing workflow.
 
 ---
+
+## Requirements Update — New FRs Added
+
+**Timestamp**: 2026-06-19T00:00:00Z
+**User Input**: "There are three requirements I'd like to add: 1) exit option in main menu, 2) return to main menu after all boxes loaded, 3) detect closed POL window and offer retry."
+**AI Response**: Added FR-10 (Exit Option), FR-11 (Return to Main Menu After Launch Queue), FR-12 (POL Window Closure Detection and Retry). Updated Story 5 acceptance criteria (exit option), Story 6 acceptance criteria (return to menu, window detection, retry logic). Updated unit-of-work-story-map.md.
+**Context**: Mid-construction requirements addition. No structural changes to unit order or dependencies.
+
+---

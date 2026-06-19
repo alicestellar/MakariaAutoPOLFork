@@ -9,8 +9,8 @@ Each unit maps 1:1 to a user story. This is intentional — the stories were alr
 | 2    | Story 2: Extended Config Schema | FR-04, FR-09 | Add `profileGroup`, `slot` per account | Migration prompt for legacy |
 | 3    | Story 3: Profile Group File Swap | FR-02, NFR-02 | None | None (transparent to user) |
 | 4    | Story 4: Archive Management | FR-03 | None (archives are .bin files, not config) | New archive menu |
-| 5    | Story 5: Unified Alliance UI | FR-05 | None | Replace selection menu entirely |
-| 6    | Story 6: Sequential Launch | FR-07 | Add `continueKey` (optional) | Checkpoint messages |
+| 5    | Story 5: Unified Alliance UI | FR-05, FR-10 | None | Replace selection menu entirely |
+| 6    | Story 6: Sequential Launch | FR-07, FR-11, FR-12 | Add `continueKey` (optional) | Checkpoint messages, retry prompt |
 | 7    | Story 7: Swap Delay | FR-08 | Add `swapDelay` (optional, default 4s) | Warning + countdown display |
 | 8    | Story 8: Party Presets | FR-05 (preset portion) | None | Preset menu options |
 | 9    | Story 9: Ad-Hoc Queue | FR-05 (custom queue portion) | None | Queue builder interaction |
