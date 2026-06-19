@@ -9,6 +9,28 @@ Versioning scheme:
 
 ---
 
+## [1.0.0] - 2026-06-19
+
+### Milestone: Profile Management Complete
+
+First major release of the Makaria fork. All profile management features are functional and tested.
+
+### Features (since 0.0.23 upstream)
+
+- POL path auto-discovery (registry, common paths, user prompt)
+- Multi-profile group system (up to 5 groups of 4 accounts = 20 slots)
+- Automatic profile group file swap before launch
+- Active profile group persisted across restarts
+- Archive management (save, import from MultiPOL)
+- Account defaults (shared password, TOTP, Windower args)
+- Config backup on every write (never destroys data)
+- Backup restore on JSON parse failure
+- Auto-elevation to admin on startup
+- Default Windower profile option during account setup
+- Import existing MultiPOL archives from main menu
+
+---
+
 ## [0.4.2] - 2026-06-19
 
 ### Added
