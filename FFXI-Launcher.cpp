@@ -1898,7 +1898,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 2.0.0\n";
+    std::cout << "Version: 2.1.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -2035,12 +2035,21 @@ int main(int argc, char* argv[]) {
 
         std::cout << "\n  Options:\n";
         std::cout << "  [M] Launch multiple (enter numbers separated by commas)\n";
+        // Show party presets only if enough accounts exist
+        if (config.accounts.size() >= 6)
+            std::cout << "  [P1] Launch Party 1 (chars 1-6)\n";
+        if (config.accounts.size() >= 12)
+            std::cout << "  [P2] Launch Party 2 (chars 7-12)\n";
+        if (config.accounts.size() >= 18)
+            std::cout << "  [P3] Launch Party 3 (chars 13-18)\n";
+        if (config.accounts.size() >= 12)
+            std::cout << "  [A]  Launch Full Alliance (all characters)\n";
         std::cout << "  [E] Edit configuration\n";
         std::cout << "  [B] Backup/Archive login_w.bin\n";
         std::cout << "  [I] Import existing archives\n";
         std::cout << "  [Q] Exit\n";
         std::cout << "===================================================\n";
-        std::cout << "Select character number, 'M' for multi-launch, or option letter: ";
+        std::cout << "Select character number, preset, or option letter: ";
 
         std::string input;
         std::getline(std::cin, input);
@@ -2067,6 +2076,58 @@ int main(int argc, char* argv[]) {
         }
         if (lowerInput == "i") {
             importArchives(config, configPath);
+            continue;
+        }
+
+        // Party/Alliance presets — build queue and fall through to sequential launch
+        std::vector<AccountConfig*> launchQueue;
+        bool isPreset = false;
+
+        if (lowerInput == "p1" && config.accounts.size() >= 6) {
+            for (size_t i = 0; i < 6; i++) launchQueue.push_back(&config.accounts[i]);
+            isPreset = true;
+        } else if (lowerInput == "p2" && config.accounts.size() >= 12) {
+            for (size_t i = 6; i < 12; i++) launchQueue.push_back(&config.accounts[i]);
+            isPreset = true;
+        } else if (lowerInput == "p3" && config.accounts.size() >= 18) {
+            for (size_t i = 12; i < 18; i++) launchQueue.push_back(&config.accounts[i]);
+            isPreset = true;
+        } else if (lowerInput == "a" && config.accounts.size() >= 2) {
+            for (size_t i = 0; i < config.accounts.size(); i++) launchQueue.push_back(&config.accounts[i]);
+            isPreset = true;
+        }
+
+        if (isPreset) {
+            // Execute the sequential launch for the preset
+            std::cout << "\nLaunching " << launchQueue.size() << " character(s) sequentially...\n";
+            for (size_t qi = 0; qi < launchQueue.size(); qi++) {
+                AccountConfig* acc = launchQueue[qi];
+                if (acc->profileGroup > 0) {
+                    if (!swapProfileGroup(acc->profileGroup, config, configPath)) {
+                        std::cerr << "Profile swap failed for " << acc->name << ". Skipping.\n";
+                        continue;
+                    }
+                }
+                std::cout << "\n--- [" << (qi + 1) << "/" << launchQueue.size() << "] Launching: " << acc->name << " ---\n";
+                if (!config.POLProxy) {
+                    launchAccount(*acc, config);
+                } else {
+                    shouldExit = false;
+                    proxyPort = (config.clientRegion == "JP") ? 51300 : 51304;
+                    std::thread proxyThread(startProxyServer);
+                    launchAccount(*acc, config);
+                    while (!shouldExit) { Sleep(100); }
+                    proxyThread.join();
+                    if (hostsEntryAdded.load()) { removeHostsEntry(); hostsEntryAdded = false; }
+                }
+                if (qi < launchQueue.size() - 1) {
+                    std::cout << "\n[CHECKPOINT] " << acc->name << " launched.\n";
+                    std::cout << "Press Enter when ready for next character...";
+                    std::string dummy;
+                    std::getline(std::cin, dummy);
+                }
+            }
+            std::cout << "\nAll " << launchQueue.size() << " character(s) launched. Returning to menu...\n";
             continue;
         }
 

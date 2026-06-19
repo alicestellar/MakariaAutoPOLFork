@@ -9,6 +9,17 @@ Versioning scheme:
 
 ---
 
+## [2.1.0] - 2026-06-19
+
+### Added
+
+- Party presets: `[P1]` launches chars 1-6, `[P2]` launches 7-12, `[P3]` launches 13-18
+- Alliance preset: `[A]` launches all configured characters sequentially
+- Presets only shown when enough accounts are configured to fill them
+- All presets use the same sequential launch engine with Enter pauses
+
+---
+
 ## [2.0.0] - 2026-06-19
 
 ### Milestone: Full Multi-Launch Flow Complete
