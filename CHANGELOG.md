@@ -9,6 +9,16 @@ Versioning scheme:
 
 ---
 
+## [0.3.1] - 2026-06-19
+
+### Changed
+
+- Active profile group now persisted in `config.json` as `activeProfileGroup`
+- Removed global variable tracking; swap state survives app restarts
+- Skip unnecessary file copies on startup when config already knows which group is loaded
+
+---
+
 ## [0.3.0] - 2026-06-19
 
 ### Added

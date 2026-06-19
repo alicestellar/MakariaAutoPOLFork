@@ -71,6 +71,7 @@ struct GlobalConfig {
     bool POLProxy;
     std::string clientRegion; // "US" or "JP" or "EU"
     std::string polPath;     // Path to POL usr\all directory
+    int activeProfileGroup;  // Last profile group loaded into login_w.bin (0 = unknown)
     std::vector<AccountConfig> accounts;
 };
 
@@ -420,6 +421,7 @@ void writeConfigFile(const std::string& path, const GlobalConfig& config) {
     j["delay"] = config.delay;
     j["clientRegion"] = config.clientRegion;
     j["polPath"] = config.polPath;
+    j["activeProfileGroup"] = config.activeProfileGroup;
     json accounts = json::array();
     for (const auto& account : config.accounts) {
         json acc;
@@ -449,6 +451,7 @@ GlobalConfig loadConfig(const std::string& path) {
         config.delay = j.value("delay", 3000);
         config.clientRegion = j.value("clientRegion", "US"); // Default to US if not set
         config.polPath = j.value("polPath", ""); // Empty means needs discovery
+        config.activeProfileGroup = j.value("activeProfileGroup", 0); // 0 = unknown
         if (j.contains("accounts")) {
             for (const auto& acc : j["accounts"]) {
                 AccountConfig account;
@@ -760,24 +763,21 @@ void defocusExistingPOL() {
     }
 }
 
-// Track which profile group is currently active (0 = unknown/none)
-int activeProfileGroup = 0;
-
 // Swap the correct profile group's login_w.bin into place
 // Returns true if swap succeeded (or was unnecessary), false on failure
-bool swapProfileGroup(int targetGroup, const std::string& polPath) {
+bool swapProfileGroup(int targetGroup, GlobalConfig& config, const std::string& configPath) {
     if (targetGroup < 1 || targetGroup > 5) {
         std::cerr << "Invalid profile group: " << targetGroup << "\n";
         return false;
     }
 
     // If the target group is already active, no swap needed
-    if (activeProfileGroup == targetGroup) {
+    if (config.activeProfileGroup == targetGroup) {
         return true;
     }
 
-    std::string sourcePath = polPath + "\\login_w." + std::to_string(targetGroup) + ".bin";
-    std::string destPath = polPath + "\\login_w.bin";
+    std::string sourcePath = config.polPath + "\\login_w." + std::to_string(targetGroup) + ".bin";
+    std::string destPath = config.polPath + "\\login_w.bin";
 
     // Verify source file exists and is non-zero
     DWORD sourceAttrs = GetFileAttributesA(sourcePath.c_str());
@@ -808,7 +808,8 @@ bool swapProfileGroup(int targetGroup, const std::string& polPath) {
         return false;
     }
 
-    activeProfileGroup = targetGroup;
+    config.activeProfileGroup = targetGroup;
+    writeConfigFile(configPath, config);
     std::cout << "Profile group " << targetGroup << " loaded (login_w." << targetGroup << ".bin -> login_w.bin)\n";
     return true;
 }
@@ -1468,7 +1469,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 0.3.0\n";
+    std::cout << "Version: 0.3.1\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1614,7 +1615,7 @@ int main(int argc, char* argv[]) {
 
         // Swap profile group if needed before launching
         if (toLaunch->profileGroup > 0) {
-            if (!swapProfileGroup(toLaunch->profileGroup, config.polPath)) {
+            if (!swapProfileGroup(toLaunch->profileGroup, config, configPath)) {
                 std::cerr << "Profile swap failed. Aborting launch.\n";
                 return 1;
             }
