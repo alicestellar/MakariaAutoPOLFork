@@ -9,6 +9,18 @@ Versioning scheme:
 
 ---
 
+## [3.0.1] - 2026-06-19
+
+### Changed
+
+- Complete README rewrite covering all fork features
+- Documents: alliance UI, multi-launch, presets, profile groups, archive management
+- Adds migration guide from MultiPOL/batch scripts
+- Updated config.json example with all new fields
+- Build from source instructions updated
+
+---
+
 ## [3.0.0] - 2026-06-19
 
 ### Milestone: All Features Complete
