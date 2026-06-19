@@ -9,6 +9,17 @@ Versioning scheme:
 
 ---
 
+## [0.3.0] - 2026-06-19
+
+### Added
+
+- Profile group file swap: automatically copies correct `login_w.{N}.bin` into `login_w.bin` before launch
+- Tracks active profile group to skip unnecessary copies
+- Validates source file exists and is non-zero before copying
+- Aborts launch with error message if swap fails
+
+---
+
 ## [0.2.1] - 2026-06-19
 
 ### Added

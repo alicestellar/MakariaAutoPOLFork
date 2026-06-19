@@ -760,6 +760,59 @@ void defocusExistingPOL() {
     }
 }
 
+// Track which profile group is currently active (0 = unknown/none)
+int activeProfileGroup = 0;
+
+// Swap the correct profile group's login_w.bin into place
+// Returns true if swap succeeded (or was unnecessary), false on failure
+bool swapProfileGroup(int targetGroup, const std::string& polPath) {
+    if (targetGroup < 1 || targetGroup > 5) {
+        std::cerr << "Invalid profile group: " << targetGroup << "\n";
+        return false;
+    }
+
+    // If the target group is already active, no swap needed
+    if (activeProfileGroup == targetGroup) {
+        return true;
+    }
+
+    std::string sourcePath = polPath + "\\login_w." + std::to_string(targetGroup) + ".bin";
+    std::string destPath = polPath + "\\login_w.bin";
+
+    // Verify source file exists and is non-zero
+    DWORD sourceAttrs = GetFileAttributesA(sourcePath.c_str());
+    if (sourceAttrs == INVALID_FILE_ATTRIBUTES) {
+        std::cerr << "Profile group file not found: " << sourcePath << "\n";
+        std::cerr << "You may need to archive your current config first.\n";
+        return false;
+    }
+
+    // Check file size
+    HANDLE hFile = CreateFileA(sourcePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        std::cerr << "Cannot open profile group file: " << sourcePath << "\n";
+        return false;
+    }
+    LARGE_INTEGER fileSize;
+    if (!GetFileSizeEx(hFile, &fileSize) || fileSize.QuadPart == 0) {
+        std::cerr << "Profile group file is empty: " << sourcePath << "\n";
+        CloseHandle(hFile);
+        return false;
+    }
+    CloseHandle(hFile);
+
+    // Perform the copy
+    if (!CopyFileA(sourcePath.c_str(), destPath.c_str(), FALSE)) {
+        DWORD err = GetLastError();
+        std::cerr << "Failed to copy profile group file (error " << err << "): " << sourcePath << " -> " << destPath << "\n";
+        return false;
+    }
+
+    activeProfileGroup = targetGroup;
+    std::cout << "Profile group " << targetGroup << " loaded (login_w." << targetGroup << ".bin -> login_w.bin)\n";
+    return true;
+}
+
 void launchAccount(const AccountConfig& account, const GlobalConfig& config) {
     // Determine port based on client region
     int port = [&]() {
@@ -1415,7 +1468,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 0.2.1\n";
+    std::cout << "Version: 0.3.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -1558,6 +1611,15 @@ int main(int argc, char* argv[]) {
             std::cout << "No account found for requested character name.\n";
             return 1;
         }
+
+        // Swap profile group if needed before launching
+        if (toLaunch->profileGroup > 0) {
+            if (!swapProfileGroup(toLaunch->profileGroup, config.polPath)) {
+                std::cerr << "Profile swap failed. Aborting launch.\n";
+                return 1;
+            }
+        }
+
         if (!config.POLProxy) {
             launchAccount(*toLaunch, config);
             return 0;
