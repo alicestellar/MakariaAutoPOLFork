@@ -9,6 +9,26 @@ Versioning scheme:
 
 ---
 
+## [0.4.2] - 2026-06-19
+
+### Added
+
+- Config backup: `config.json.bak` created before every write (never destroys data)
+- Backup restore prompt on parse failure (recovers from accidental corruption)
+- Account defaults system: shared password, TOTP, and Windower args across accounts
+- `defaults` object in `config.json` for cross-account shared values
+- Accounts with empty fields automatically fall back to defaults at runtime
+- `[F] Set account defaults` option in edit configuration menu
+- Defaults setup offered during initial configuration
+
+### Changed
+
+- All account field reads now use `.value()` for safer JSON parsing (no exceptions on missing keys)
+- Setup prompts now say "leave empty to use default" for password/TOTP
+- `promptWindowerArgs()` helper used consistently in all account creation/edit flows
+
+---
+
 ## [0.4.1] - 2026-06-19
 
 ### Added
