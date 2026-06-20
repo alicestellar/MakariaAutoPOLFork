@@ -9,6 +9,17 @@ Versioning scheme:
 
 ---
 
+## [3.1.1] - 2026-06-19
+
+### Changed
+
+- WindowerLauncher import now lets user choose which archive slot (1-5) for each profile
+- Shows current archive status (occupied/empty + account names) before asking
+- Warns before overwriting an occupied slot (requires confirmation)
+- Option to skip (0) any profile during import
+
+---
+
 ## [3.1.0] - 2026-06-19
 
 ### Added

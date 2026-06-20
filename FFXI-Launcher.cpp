@@ -1489,32 +1489,52 @@ void importWindowerLauncher(GlobalConfig& config, const std::string& configPath)
         std::string& profileName = foundProfiles[toImport[i]];
         std::string sourceFile = profilesDir + "\\login_w_" + profileName + ".bin";
 
-        // Find next available slot (1-5)
-        int targetSlot = 0;
+        // Show current archive status and let user pick
+        std::cout << "\n  Profile '" << profileName << "' -> save to which archive slot (1-5)?\n";
+        std::cout << "  Current archive status:\n";
         for (int s = 1; s <= 5; s++) {
             std::string destPath = config.polPath + "\\login_w." + std::to_string(s) + ".bin";
-            if (GetFileAttributesA(destPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
-                targetSlot = s;
-                break;
+            bool exists = GetFileAttributesA(destPath.c_str()) != INVALID_FILE_ATTRIBUTES;
+            std::cout << "    [" << s << "] ";
+            if (exists) {
+                std::cout << "occupied (";
+                bool first = true;
+                for (const auto& acc : config.accounts) {
+                    if (acc.profileGroup == s) {
+                        if (!first) std::cout << ", ";
+                        std::cout << acc.name;
+                        first = false;
+                    }
+                }
+                if (first) std::cout << "no accounts assigned";
+                std::cout << ")";
+            } else {
+                std::cout << "empty";
             }
+            std::cout << "\n";
+        }
+        std::cout << "  Slot (1-5, or 0 to skip): ";
+        std::getline(std::cin, input);
+
+        int targetSlot = 0;
+        if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+            targetSlot = std::stoi(input);
+        }
+        if (targetSlot < 1 || targetSlot > 5) {
+            std::cout << "  Skipping '" << profileName << "'.\n";
+            continue;
         }
 
-        if (targetSlot == 0) {
-            std::cout << "\n  No empty archive slots available (1-5 all occupied).\n";
-            std::cout << "  Overwrite which slot for '" << profileName << "'? (1-5, or 0 to skip): ";
+        // Warn if overwriting
+        std::string destPath = config.polPath + "\\login_w." + std::to_string(targetSlot) + ".bin";
+        if (GetFileAttributesA(destPath.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            std::cout << "  WARNING: Archive slot " << targetSlot << " already exists. Overwrite? (y/n): ";
             std::getline(std::cin, input);
-            if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
-                targetSlot = std::stoi(input);
-                if (targetSlot < 1 || targetSlot > 5) {
-                    std::cout << "  Skipping " << profileName << ".\n";
-                    continue;
-                }
-            } else {
+            if (input != "y" && input != "Y") {
+                std::cout << "  Skipping '" << profileName << "'.\n";
                 continue;
             }
         }
-
-        std::string destPath = config.polPath + "\\login_w." + std::to_string(targetSlot) + ".bin";
 
         // Copy the file
         if (!CopyFileA(sourceFile.c_str(), destPath.c_str(), FALSE)) {
@@ -2126,7 +2146,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 3.1.0\n";
+    std::cout << "Version: 3.1.1\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
