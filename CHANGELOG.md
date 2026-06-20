@@ -9,6 +9,19 @@ Versioning scheme:
 
 ---
 
+## [3.2.0] - 2026-06-20
+
+### Added
+
+- Single-profile mode: supports up to 20 accounts in one `login_w.bin` (Windower extended feature)
+- `singleProfile` boolean in `config.json` to toggle between modes
+- Setup wizard asks about profile mode during initial configuration
+- `[P] Toggle profile mode` option in edit configuration menu
+- In single-profile mode: slots 1-20, no file swapping, no profile groups needed
+- `swapProfileGroup()` automatically skips when in single-profile mode
+
+---
+
 ## [3.1.1] - 2026-06-19
 
 ### Changed

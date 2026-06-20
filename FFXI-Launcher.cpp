@@ -80,6 +80,7 @@ struct SavedPreset {
 struct GlobalConfig {
     int delay;
     bool POLProxy;
+    bool singleProfile;  // true = 1 file with up to 20 slots (Windower extended), false = multi-file 4 slots each
     std::string clientRegion; // "US" or "JP" or "EU"
     std::string polPath;     // Path to POL usr\all directory
     int activeProfileGroup;  // Last profile group loaded into login_w.bin (0 = unknown)
@@ -441,6 +442,7 @@ void writeConfigFile(const std::string& path, const GlobalConfig& config) {
     j["clientRegion"] = config.clientRegion;
     j["polPath"] = config.polPath;
     j["activeProfileGroup"] = config.activeProfileGroup;
+    j["singleProfile"] = config.singleProfile;
 
     // Save defaults
     json defaults;
@@ -490,6 +492,7 @@ GlobalConfig loadConfig(const std::string& path) {
         config.clientRegion = j.value("clientRegion", "US"); // Default to US if not set
         config.polPath = j.value("polPath", ""); // Empty means needs discovery
         config.activeProfileGroup = j.value("activeProfileGroup", 0); // 0 = unknown
+        config.singleProfile = j.value("singleProfile", false);
 
         // Load defaults
         if (j.contains("defaults")) {
@@ -720,6 +723,19 @@ void setupConfig(GlobalConfig& config) {
         if (val >= 1 && val <= 20) config.delay = val * 1000;
     }
 
+    // Profile mode selection
+    std::cout << "\n--- Profile Mode ---\n";
+    std::cout << "Windower now supports up to 20 accounts in a single login profile.\n";
+    std::cout << "Are you using this extended single-profile mode? (y/n, default n): ";
+    std::getline(std::cin, input);
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+    config.singleProfile = (input == "y");
+    if (config.singleProfile) {
+        std::cout << "Single-profile mode enabled (up to 20 accounts, no file swapping).\n";
+    } else {
+        std::cout << "Multi-profile mode (4 accounts per file, automatic file swapping).\n";
+    }
+
     // Offer to set account defaults
     std::cout << "\n--- Account Defaults ---\n";
     std::cout << "If your accounts share the same password, TOTP, or Windower args,\n";
@@ -773,30 +789,39 @@ void setupConfig(GlobalConfig& config) {
         std::getline(std::cin, account.password);
         std::cout << "TOTP Secret (leave empty to use default): ";
         std::getline(std::cin, account.totpSecret);
-        // Profile Group (1-5)
-        while (true) {
-            std::cout << "Profile group (1-5, default 1): ";
-            std::getline(std::cin, input);
-            if (input.empty()) {
-                account.profileGroup = 1;
-                break;
-            }
-            if (std::all_of(input.begin(), input.end(), ::isdigit)) {
-                int pg = std::stoi(input);
-                if (pg >= 1 && pg <= 5) {
-                    account.profileGroup = pg;
+        // Profile Group (1-5) — only in multi-profile mode
+        if (!config.singleProfile) {
+            while (true) {
+                std::cout << "Profile group (1-5, default 1): ";
+                std::getline(std::cin, input);
+                if (input.empty()) {
+                    account.profileGroup = 1;
                     break;
                 }
+                if (std::all_of(input.begin(), input.end(), ::isdigit)) {
+                    int pg = std::stoi(input);
+                    if (pg >= 1 && pg <= 5) {
+                        account.profileGroup = pg;
+                        break;
+                    }
+                }
+                std::cout << "Profile group must be 1-5. Try again.\n";
             }
-            std::cout << "Profile group must be 1-5. Try again.\n";
+        } else {
+            account.profileGroup = 1; // Single profile mode — all in group 1
         }
-        // Slot (1-4) within the profile group
+        // Slot within the profile group
+        int maxSlot = config.singleProfile ? 20 : 4;
         while (true) {
-            std::cout << "POL Slot number within profile group (1-4): ";
+            if (config.singleProfile) {
+                std::cout << "POL Slot number (1-20): ";
+            } else {
+                std::cout << "POL Slot number within profile group (1-4): ";
+            }
             std::getline(std::cin, input);
             if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
                 int slot = std::stoi(input);
-                if (slot >= 1 && slot <= 4) {
+                if (slot >= 1 && slot <= maxSlot) {
                     // Check for duplicate profileGroup+slot
                     bool duplicate = false;
                     for (const auto& acc : config.accounts) {
@@ -813,7 +838,7 @@ void setupConfig(GlobalConfig& config) {
                     break;
                 }
             }
-            std::cout << "Slot must be 1-4. Try again.\n";
+            std::cout << "Slot must be 1-" << maxSlot << ". Try again.\n";
         }
         account.args = promptWindowerArgs();
         config.accounts.push_back(account);
@@ -903,6 +928,11 @@ void defocusExistingPOL() {
 // Swap the correct profile group's login_w.bin into place
 // Returns true if swap succeeded (or was unnecessary), false on failure
 bool swapProfileGroup(int targetGroup, GlobalConfig& config, const std::string& configPath) {
+    // In single-profile mode, no swapping is needed
+    if (config.singleProfile) {
+        return true;
+    }
+
     if (targetGroup < 1 || targetGroup > 5) {
         std::cerr << "Invalid profile group: " << targetGroup << "\n";
         return false;
@@ -1921,6 +1951,7 @@ bool editConfig(GlobalConfig& config) {
         std::cout << "  [D] Delete character\n";
         std::cout << "  [F] Set account defaults (shared password/TOTP/args)\n";
         std::cout << "  [C] Modify timeout\n";
+        std::cout << "  [P] Toggle profile mode (single/multi)\n";
         std::cout << "  [R] Change client region (US/JP)\n";
         std::cout << "  [X] Exit to selection screen\n";
         std::cout << "Enter option: ";
@@ -2050,6 +2081,14 @@ bool editConfig(GlobalConfig& config) {
                     std::cout << "Timeout updated.\n";
                 }
             }
+        } else if (input == "p") {
+            std::cout << "Current mode: " << (config.singleProfile ? "Single-profile (up to 20 slots)" : "Multi-profile (4 slots per file)") << "\n";
+            std::cout << "Switch to " << (config.singleProfile ? "multi-profile" : "single-profile") << " mode? (y/n): ";
+            std::getline(std::cin, input);
+            if (input == "y" || input == "Y") {
+                config.singleProfile = !config.singleProfile;
+                std::cout << "Mode changed to: " << (config.singleProfile ? "Single-profile (up to 20 slots, no file swapping)" : "Multi-profile (4 slots per file, automatic swapping)") << "\n";
+            }
         } else if (input == "r") {
             std::cout << "Current client region: " << config.clientRegion << "\n";
             std::cout << "New client region (US/JP): ";
@@ -2146,7 +2185,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 3.1.1\n";
+    std::cout << "Version: 3.2.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
