@@ -2011,17 +2011,38 @@ bool editConfig(GlobalConfig& config) {
             std::cout << "\nAdding new character:\n";
             std::cout << "Character name (no spaces, unique): ";
             std::getline(std::cin, newAcc.name);
-            std::cout << "Password: ";
+            std::cout << "Password (leave empty to use default): ";
             std::getline(std::cin, newAcc.password);
-            std::cout << "TOTP Secret (leave empty if not using): ";
+            std::cout << "TOTP Secret (leave empty to use default): ";
             std::getline(std::cin, newAcc.totpSecret);
-            std::cout << "POL Slot number (1-4): ";
-            std::getline(std::cin, input);
-            if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
-                int slot = std::stoi(input);
-                if (slot >= 1 && slot <= 4) {
-                    newAcc.slot = slot;
+            // Profile group
+            if (!config.singleProfile) {
+                while (true) {
+                    std::cout << "Profile group (1-5, default 1): ";
+                    std::getline(std::cin, input);
+                    if (input.empty()) { newAcc.profileGroup = 1; break; }
+                    if (std::all_of(input.begin(), input.end(), ::isdigit)) {
+                        int pg = std::stoi(input);
+                        if (pg >= 1 && pg <= 5) { newAcc.profileGroup = pg; break; }
+                    }
+                    std::cout << "Must be 1-5.\n";
                 }
+            } else {
+                newAcc.profileGroup = 1;
+            }
+            // Slot
+            int maxSlot = config.singleProfile ? 20 : 4;
+            while (true) {
+                std::cout << "POL Slot number (1-" << maxSlot << "): ";
+                std::getline(std::cin, input);
+                if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                    int slot = std::stoi(input);
+                    if (slot >= 1 && slot <= maxSlot) {
+                        newAcc.slot = slot;
+                        break;
+                    }
+                }
+                std::cout << "Must be 1-" << maxSlot << ".\n";
             }
             newAcc.args = promptWindowerArgs();
             config.accounts.push_back(newAcc);
@@ -2185,7 +2206,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 3.2.0\n";
+    std::cout << "Version: 3.2.1\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
