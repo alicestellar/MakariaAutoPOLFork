@@ -9,6 +9,19 @@ Versioning scheme:
 
 ---
 
+## [3.1.0] - 2026-06-19
+
+### Added
+
+- WindowerLauncher profile import (`[W]` from main menu)
+- Scans WindowerLauncher's `profiles/<locale>/login_w_<name>.bin` files
+- Copies selected profiles into autoPOL's numbered archive system
+- Walks through account assignment for each imported profile
+- Supports US/JP/EU locale selection
+- Auto-assigns to next available archive slot (or manual override)
+
+---
+
 ## [3.0.1] - 2026-06-19
 
 ### Changed

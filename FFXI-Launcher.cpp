@@ -1391,6 +1391,203 @@ void startProxyServer() {
     }
 }
 
+// Import from WindowerLauncher profiles directory
+void importWindowerLauncher(GlobalConfig& config, const std::string& configPath) {
+    std::string input;
+
+    std::cout << "\n--- Import from WindowerLauncher ---\n";
+    std::cout << "WindowerLauncher stores profiles as: profiles/<locale>/login_w_<name>.bin\n\n";
+
+    // Ask for WindowerLauncher directory
+    std::cout << "Enter path to WindowerLauncher folder (where WindowerLauncher.exe lives): ";
+    std::getline(std::cin, input);
+    input.erase(0, input.find_first_not_of(" \t\""));
+    input.erase(input.find_last_not_of(" \t\"") + 1);
+
+    if (input.empty() || GetFileAttributesA(input.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        std::cerr << "Path not found: " << input << "\n";
+        return;
+    }
+
+    // Determine locale
+    std::string locale = config.clientRegion;
+    std::cout << "Locale to import from (US/JP/EU, default " << locale << "): ";
+    std::string localeInput;
+    std::getline(std::cin, localeInput);
+    if (!localeInput.empty()) {
+        std::transform(localeInput.begin(), localeInput.end(), localeInput.begin(), ::toupper);
+        if (localeInput == "US" || localeInput == "JP" || localeInput == "EU") {
+            locale = localeInput;
+        }
+    }
+
+    std::string profilesDir = input + "\\profiles\\" + locale;
+    if (GetFileAttributesA(profilesDir.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        std::cerr << "Profiles directory not found: " << profilesDir << "\n";
+        return;
+    }
+
+    // Scan for login_w_*.bin files
+    std::vector<std::string> foundProfiles;
+    WIN32_FIND_DATAA findData;
+    std::string searchPattern = profilesDir + "\\login_w_*.bin";
+    HANDLE hFind = FindFirstFileA(searchPattern.c_str(), &findData);
+    if (hFind == INVALID_HANDLE_VALUE) {
+        std::cout << "No profiles found in: " << profilesDir << "\n";
+        return;
+    }
+    do {
+        std::string filename = findData.cFileName;
+        // Extract profile name from "login_w_<name>.bin"
+        if (filename.size() > 9 && filename.substr(0, 8) == "login_w_" && filename.substr(filename.size() - 4) == ".bin") {
+            std::string profileName = filename.substr(8, filename.size() - 12); // strip "login_w_" and ".bin"
+            foundProfiles.push_back(profileName);
+        }
+    } while (FindNextFileA(hFind, &findData));
+    FindClose(hFind);
+
+    if (foundProfiles.empty()) {
+        std::cout << "No profiles found in: " << profilesDir << "\n";
+        return;
+    }
+
+    std::cout << "\nFound " << foundProfiles.size() << " WindowerLauncher profile(s):\n";
+    for (size_t i = 0; i < foundProfiles.size(); i++) {
+        std::cout << "  [" << (i + 1) << "] " << foundProfiles[i] << "\n";
+    }
+
+    std::cout << "\nFor each profile you import, it will be saved as a profile group (login_w.{N}.bin).\n";
+    std::cout << "Import which profiles? Enter numbers separated by commas (or 'all'): ";
+    std::getline(std::cin, input);
+    std::transform(input.begin(), input.end(), input.begin(), ::tolower);
+
+    std::vector<size_t> toImport;
+    if (input == "all") {
+        for (size_t i = 0; i < foundProfiles.size(); i++) toImport.push_back(i);
+    } else {
+        std::stringstream ss(input);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            token.erase(0, token.find_first_not_of(" \t"));
+            token.erase(token.find_last_not_of(" \t") + 1);
+            if (!token.empty() && std::all_of(token.begin(), token.end(), ::isdigit)) {
+                int idx = std::stoi(token);
+                if (idx >= 1 && (size_t)idx <= foundProfiles.size()) {
+                    toImport.push_back(idx - 1);
+                }
+            }
+        }
+    }
+
+    if (toImport.empty()) {
+        std::cout << "No profiles selected.\n";
+        return;
+    }
+
+    // Import each selected profile
+    for (size_t i = 0; i < toImport.size(); i++) {
+        std::string& profileName = foundProfiles[toImport[i]];
+        std::string sourceFile = profilesDir + "\\login_w_" + profileName + ".bin";
+
+        // Find next available slot (1-5)
+        int targetSlot = 0;
+        for (int s = 1; s <= 5; s++) {
+            std::string destPath = config.polPath + "\\login_w." + std::to_string(s) + ".bin";
+            if (GetFileAttributesA(destPath.c_str()) == INVALID_FILE_ATTRIBUTES) {
+                targetSlot = s;
+                break;
+            }
+        }
+
+        if (targetSlot == 0) {
+            std::cout << "\n  No empty archive slots available (1-5 all occupied).\n";
+            std::cout << "  Overwrite which slot for '" << profileName << "'? (1-5, or 0 to skip): ";
+            std::getline(std::cin, input);
+            if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                targetSlot = std::stoi(input);
+                if (targetSlot < 1 || targetSlot > 5) {
+                    std::cout << "  Skipping " << profileName << ".\n";
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        }
+
+        std::string destPath = config.polPath + "\\login_w." + std::to_string(targetSlot) + ".bin";
+
+        // Copy the file
+        if (!CopyFileA(sourceFile.c_str(), destPath.c_str(), FALSE)) {
+            DWORD err = GetLastError();
+            std::cerr << "  Failed to copy '" << profileName << "' (error " << err << ")\n";
+            continue;
+        }
+
+        std::cout << "\n  Imported '" << profileName << "' -> login_w." << targetSlot << ".bin\n";
+
+        // Assign accounts
+        std::cout << "  How many accounts in this profile? (1-4): ";
+        std::getline(std::cin, input);
+        int numAccounts = 0;
+        if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+            numAccounts = std::stoi(input);
+            if (numAccounts < 1 || numAccounts > 4) numAccounts = 0;
+        }
+
+        for (int a = 0; a < numAccounts; a++) {
+            std::cout << "    Account " << (a + 1) << " name: ";
+            std::string accName;
+            std::getline(std::cin, accName);
+            if (accName.empty()) continue;
+
+            // Check existing
+            bool exists = false;
+            for (auto& acc : config.accounts) {
+                if (_stricmp(acc.name.c_str(), accName.c_str()) == 0) {
+                    acc.profileGroup = targetSlot;
+                    std::cout << "    Updated existing account -> group " << targetSlot << "\n";
+                    while (true) {
+                        std::cout << "    POL slot (1-4): ";
+                        std::getline(std::cin, input);
+                        if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                            int slot = std::stoi(input);
+                            if (slot >= 1 && slot <= 4) { acc.slot = slot; break; }
+                        }
+                        std::cout << "    Must be 1-4.\n";
+                    }
+                    exists = true;
+                    break;
+                }
+            }
+            if (exists) continue;
+
+            // New account
+            AccountConfig newAcc;
+            newAcc.name = accName;
+            newAcc.profileGroup = targetSlot;
+            while (true) {
+                std::cout << "    POL slot (1-4): ";
+                std::getline(std::cin, input);
+                if (!input.empty() && std::all_of(input.begin(), input.end(), ::isdigit)) {
+                    int slot = std::stoi(input);
+                    if (slot >= 1 && slot <= 4) { newAcc.slot = slot; break; }
+                }
+                std::cout << "    Must be 1-4.\n";
+            }
+            std::cout << "    Password (leave empty to use default): ";
+            std::getline(std::cin, newAcc.password);
+            std::cout << "    TOTP Secret (leave empty to use default): ";
+            std::getline(std::cin, newAcc.totpSecret);
+            newAcc.args = promptWindowerArgs();
+            config.accounts.push_back(newAcc);
+            std::cout << "    Added " << accName << " -> group " << targetSlot << " slot " << newAcc.slot << "\n";
+        }
+    }
+
+    writeConfigFile(configPath, config);
+    std::cout << "\nWindowerLauncher import complete.\n";
+}
+
 // Import existing archives — scan for login_w.{N}.bin files and assign accounts
 void importArchives(GlobalConfig& config, const std::string& configPath) {
     std::string input;
@@ -1929,7 +2126,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Original version by: jaku | https://github.com/jaku/FFXI-autoPOL\n";
     std::cout << "Fork by: Makaria       | https://github.com/alicestellar/MakariaAutoPOLFork\n";
-    std::cout << "Version: 3.0.1\n";
+    std::cout << "Version: 3.1.0\n";
     DEBUG_KEY_PRESSES = false;
     // Parse command line arguments
     for (int i = 1; i < argc; i++) {
@@ -2094,6 +2291,7 @@ int main(int argc, char* argv[]) {
         std::cout << "  [E] Edit configuration\n";
         std::cout << "  [B] Backup/Archive login_w.bin\n";
         std::cout << "  [I] Import existing archives\n";
+        std::cout << "  [W] Import from WindowerLauncher\n";
         std::cout << "  [Q] Exit\n";
         std::cout << "===================================================\n";
         std::cout << "Select character number, preset, or option letter: ";
@@ -2123,6 +2321,10 @@ int main(int argc, char* argv[]) {
         }
         if (lowerInput == "i") {
             importArchives(config, configPath);
+            continue;
+        }
+        if (lowerInput == "w") {
+            importWindowerLauncher(config, configPath);
             continue;
         }
         if (lowerInput == "s") {

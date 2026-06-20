@@ -217,4 +217,5 @@ Your existing archive files are compatible — no conversion needed.
 - **jaku** — original autoPOL (https://github.com/jaku/FFXI-autoPOL)
 - **Makaria** — this fork with multi-profile and alliance features
 
-If you're on the Phoenix server, say hi to Makaria sometime!
+If you're on the Phoenix server, say hi to jaku sometime!
+And if you're on the Bahamut server, you can say hi to Makaria!
